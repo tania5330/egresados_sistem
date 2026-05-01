@@ -1,0 +1,33 @@
+{
+  "name": "sistema-egresados",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "npm run dev --workspace=@egresados/server",
+    "dev:web": "npm run dev --workspace=@egresados/web",
+    "build": "npm run build --workspaces",
+    "build:server": "npm run build --workspace=@egresados/server",
+    "build:web": "npm run build --workspace=@egresados/web",
+    "test": "npm run test --workspaces",
+    "test:server": "npm run test --workspace=@egresados/server",
+    "test:web": "npm run test --workspace=@egresados/web",
+    "test:e2e": "npm run test:e2e --workspace=@egresados/web",
+    "lint": "npm run lint --workspaces",
+    "db:migrate": "npm run db:migrate --workspace=@egresados/server",
+    "db:seed": "npm run db:seed --workspace=@egresados/server",
+    "docker:up": "docker-compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker-compose -f docker/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

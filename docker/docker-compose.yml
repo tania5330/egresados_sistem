@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: egresados_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: egress_user
+      POSTGRES_PASSWORD: egress_pass
+      POSTGRES_DB: egresados_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U egress_user -d egresados_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: egresados_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server
+    container_name: egresados_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://egress_user:egress_pass@postgres:5432/egresados_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-supersecretjwtkey12345678901234567890}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-supersecretrefreshkey12345678901234567890}
+      NODE_ENV: production
+      PORT: 3001
+    volumes:
+      - ./uploads:/app/uploads
+      - ./reports:/app/reports
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    container_name: egresados_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NODE_ENV: production
+
+volumes:
+  postgres_data:
+  redis_data:
