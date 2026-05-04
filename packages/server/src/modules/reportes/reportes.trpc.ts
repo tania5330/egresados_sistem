@@ -16,8 +16,12 @@ export class ReportesTrpc {
     generar: this.trpc.protectedProcedure
       .input(createReporteSchema)
       .mutation(async ({ input, ctx }) => {
-        if (ctx.user.role !== 'ADMIN') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Acceso solo para administradores' });
+        const userRole = ctx.user.role.toUpperCase();
+        if (userRole !== 'ADMIN') {
+          throw new TRPCError({ 
+            code: 'FORBIDDEN', 
+            message: `Acceso denegado: se requiere rol de ADMINISTRADOR (tu rol actual: ${userRole})` 
+          });
         }
         return this.service.crearReporte(input, ctx.user.id);
       }),

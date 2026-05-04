@@ -144,7 +144,7 @@ export default function PerfilPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Email</label>
-                  <Input defaultValue={profile.usuario?.email || ""} disabled />
+                  <Input defaultValue={profile?.usuario?.email || profile?.user?.email || ""} disabled />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Teléfono</label>

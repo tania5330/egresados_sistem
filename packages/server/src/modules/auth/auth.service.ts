@@ -229,7 +229,7 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: (process.env.JWT_ACCESS_EXPIRES as any) || '15m',
+      expiresIn: (process.env.JWT_ACCESS_EXPIRES as any) || '24h',
     });
 
     const refreshToken = this.jwtService.sign(payload, {

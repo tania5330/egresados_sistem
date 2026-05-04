@@ -34,9 +34,11 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
         httpBatchLink({
           url: getTrpcUrl(),
           headers() {
-            const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+            if (typeof window === "undefined") return {};
+            const token = localStorage.getItem("accessToken");
+            if (!token || token === "undefined" || token === "null") return {};
             return {
-              authorization: token ? `Bearer ${token}` : undefined,
+              authorization: `Bearer ${token}`,
             };
           },
         }),

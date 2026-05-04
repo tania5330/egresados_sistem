@@ -20,6 +20,15 @@ export default function DashboardPage() {
         case "EMPRESA":
           router.push("/dashboard/empresa");
           break;
+        case "admin":
+          router.push("/dashboard/admin");
+          break;
+        case "egresado":
+          router.push("/dashboard/egresado");
+          break;
+        case "empresa":
+          router.push("/dashboard/empresa");
+          break;
         default:
           router.push("/auth/login");
       }

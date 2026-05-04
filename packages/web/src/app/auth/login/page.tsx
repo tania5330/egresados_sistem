@@ -17,7 +17,7 @@ export default function LoginPage() {
       localStorage.setItem("refreshToken", data.refreshToken);
       localStorage.setItem("user", JSON.stringify(data.user));
       
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     },
     onError: (err) => {
       setError(err.message || "Error al iniciar sesión");

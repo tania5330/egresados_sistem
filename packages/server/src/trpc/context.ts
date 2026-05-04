@@ -7,13 +7,23 @@ const prisma = new PrismaClient();
 
 export const createContext = async ({ req, res }: CreateExpressContextOptions) => {
   const getUser = async () => {
-    if (req.headers.authorization) {
-      const token = req.headers.authorization.split(' ')[1];
+    const authHeader = req.headers.authorization;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      
+      if (!token || token === 'null' || token === 'undefined') {
+        return null;
+      }
+
       try {
         const secret = process.env.JWT_SECRET || 'default-secret-change-in-production';
         const decoded = jwt.verify(token, secret) as any;
         
-        // Enriquecer el contexto con el perfil completo
+        if (!decoded || !decoded.sub) {
+          return null;
+        }
+
         const usuario = await prisma.usuario.findUnique({
           where: { id: decoded.sub },
           include: {
@@ -23,7 +33,9 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
           }
         });
 
-        if (!usuario) return null;
+        if (!usuario || !usuario.estado) {
+          return null;
+        }
 
         return {
           id: usuario.id,

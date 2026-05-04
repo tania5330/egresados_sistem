@@ -12,9 +12,12 @@ export class TrpcService {
   public protectedProcedure = this.publicProcedure.use(
     this.middleware(async ({ ctx, next }) => {
       if (!ctx.user) {
+        const hasAuthHeader = !!ctx.req.headers.authorization;
         throw new TRPCError({
           code: 'UNAUTHORIZED',
-          message: 'No autenticado',
+          message: hasAuthHeader 
+            ? 'Sesión expirada o inválida. Por favor, vuelva a iniciar sesión.' 
+            : 'No autenticado. Por favor, inicie sesión para continuar.',
         });
       }
       return next({

@@ -69,21 +69,43 @@ const MOCK_PREVIEW_DATA: Record<TipoReporte, { headers: string[]; rows: string[]
       ["2021", "Ing. Industrial", "70", "52", "74%"],
     ],
   },
+  OPERACIONAL: {
+    headers: ["Módulo", "Total Registros", "Activos", "Pendientes"],
+    rows: [
+      ["Egresados", "150", "145", "5"],
+      ["Empresas", "20", "18", "2"],
+      ["Ofertas", "45", "30", "15"],
+      ["Postulaciones", "120", "40", "80"],
+    ],
+  },
+  GESTION: {
+    headers: ["KPI", "Valor", "Meta", "Estado"],
+    rows: [
+      ["Tasa Empleabilidad", "75%", "80%", "En progreso"],
+      ["Empresas Activas", "18", "25", "Atención"],
+      ["Nuevas Ofertas (Mes)", "12", "10", "Cumplido"],
+      ["Tiempo Promedio Cierre", "15 días", "20 días", "Excelente"],
+    ],
+  },
 };
 
 function getPreviewTitle(tipo: TipoReporte): string {
   switch (tipo) {
-    case "LISTADO_EGRESADOS":
+    case TipoReporte.OPERACIONAL:
+      return "Vista Previa - Reporte Operacional";
+    case TipoReporte.GESTION:
+      return "Vista Previa - Reporte de Gestión";
+    case TipoReporte.LISTADO_EGRESADOS:
       return "Vista Previa - Listado de Egresados";
-    case "LISTADO_OFERTAS":
+    case TipoReporte.LISTADO_OFERTAS:
       return "Vista Previa - Listado de Ofertas";
-    case "POSTULACIONES_POR_OFERTA":
+    case TipoReporte.POSTULACIONES_POR_OFERTA:
       return "Vista Previa - Postulaciones por Oferta";
-    case "REPORTE_EMPLEABILIDAD":
+    case TipoReporte.REPORTE_EMPLEABILIDAD:
       return "Vista Previa - Reporte de Empleabilidad";
-    case "REPORTE_DEMANDA_LABORAL":
+    case TipoReporte.REPORTE_DEMANDA_LABORAL:
       return "Vista Previa - Reporte de Demanda Laboral";
-    case "REPORTE_COMPARATIVO_COHORTE":
+    case TipoReporte.REPORTE_COMPARATIVO_COHORTE:
       return "Vista Previa - Reporte Comparativo por Cohorte";
     default:
       return "Vista Previa del Reporte";
@@ -103,7 +125,10 @@ export function ReportPreview({ previewData, isLoading }: ReportPreviewProps) {
     );
   }
 
-  const mockData = MOCK_PREVIEW_DATA[previewData.tipo];
+  const mockData = MOCK_PREVIEW_DATA[previewData.tipo] || {
+    headers: ["Dato", "Valor"],
+    rows: [["Cargando...", ""]]
+  };
   const estimatedRecords = Math.floor(Math.random() * 100) + 50;
 
   return (

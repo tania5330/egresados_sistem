@@ -40,7 +40,7 @@ export default function DashboardLayout({
 
   return (
     <div className="flex min-h-screen bg-background">
-      <Sidebar userRole={user.role.toLowerCase()} />
+      <Sidebar userRole={user.role.toLowerCase() as any} />
       <div className="flex flex-1 flex-col">
         <Header title="Sistema Egresados" userName={user.email} />
         <main className="flex-1 p-6">{children}</main>
