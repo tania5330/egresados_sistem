@@ -248,41 +248,233 @@ export class ReportesService {
 
   async generatePdfReport(tipo: string, data: any, parametros: any): Promise<Buffer> {
     const PDFDocument = require('pdfkit');
+    
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument();
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
       const buffers: Buffer[] = [];
       doc.on('data', buffers.push.bind(buffers));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
 
-      // Header
-      doc.fontSize(20).text(`Reporte ${tipo}`, { align: 'center' });
-      doc.moveDown();
-      doc.fontSize(12).text(`Fecha de generación: ${new Date().toLocaleString()}`);
-      doc.moveDown();
+      // Colores
+      const primaryColor = '#1e40af'; // Azul oscuro
+      const secondaryColor = '#3b82f6'; // Azul medio
+      const textColor = '#1f2937'; // Gris oscuro
+      const lightGray = '#f3f4f6';
 
-      // Content based on type
+      // --- CABECERA ---
+      doc.rect(0, 0, doc.page.width, 80).fill(primaryColor);
+      doc.fillColor('#ffffff')
+         .fontSize(22)
+         .text('SISTEMA DE SEGUIMIENTO DE EGRESADOS', 50, 25, { align: 'left' });
+      doc.fontSize(14)
+         .text(`Reporte: ${this.getTipoLabel(tipo)}`, 50, 52, { align: 'left' });
+      
+      doc.fillColor('#ffffff')
+         .fontSize(10)
+         .text(`Generado el: ${new Date().toLocaleString()}`, 50, 25, { align: 'right' });
+
+      doc.moveDown(4);
+      doc.fillColor(textColor);
+
+      // --- CONTENIDO ---
       if (tipo === TipoReporte.OPERACIONAL) {
-        doc.text(`Total Egresados: ${data.totalEgresados}`);
-        doc.text(`Total Empresas: ${data.totalEmpresas}`);
-        doc.text(`Total Ofertas: ${data.totalOfertas}`);
-        doc.text(`Total Postulaciones: ${data.totalPostulaciones}`);
+        this.drawStatsCards(doc, [
+          { label: 'Total Egresados', value: data.totalEgresados },
+          { label: 'Total Empresas', value: data.totalEmpresas },
+          { label: 'Total Ofertas', value: data.totalOfertas },
+          { label: 'Total Postulaciones', value: data.totalPostulaciones }
+        ]);
       } else if (tipo === TipoReporte.GESTION) {
-        doc.text(`Tasa de Empleabilidad: ${data.tasaEmpleabilidad}%`);
-        doc.text(`Total Egresados: ${data.totalEgresados}`);
-        doc.text(`Egresados Contratados: ${data.egresadosContratados}`);
+        this.drawStatsCards(doc, [
+          { label: 'Tasa Empleabilidad', value: `${data.tasaEmpleabilidad}%` },
+          { label: 'Egresados Contratados', value: data.egresadosContratados },
+          { label: 'Total Egresados', value: data.totalEgresados }
+        ]);
+
+        doc.moveDown(2);
+        doc.fontSize(16).fillColor(primaryColor).text('Top Habilidades Demandadas', { underline: true });
         doc.moveDown();
-        doc.text('Top 5 Habilidades Demandadas:');
-        data.topHabilidades.forEach((h: any, i: number) => {
-          doc.text(`${i + 1}. ${h.nombre}: ${h.count} menciones`);
+        
+        const tableData = data.topHabilidades.map((h: any, i: number) => [
+          (i + 1).toString(),
+          h.nombre,
+          h.count.toString()
+        ]);
+        
+        this.drawTable(doc, {
+          headers: ['#', 'Habilidad', 'Menciones'],
+          rows: tableData,
+          columnWidths: [40, 300, 100]
+        });
+      } else if (tipo === TipoReporte.LISTADO_EGRESADOS) {
+        doc.fontSize(16).fillColor(primaryColor).text('Listado Detallado de Egresados');
+        doc.moveDown();
+
+        const tableData = data.egresados.map((e: any) => [
+          `${e.nombres} ${e.apellidos}`,
+          e.usuario.email,
+          e.formacion_academica?.[0]?.carrera?.nombre || 'N/A',
+          e.buscando_empleo ? 'Sí' : 'No'
+        ]);
+
+        this.drawTable(doc, {
+          headers: ['Nombre Completo', 'Email', 'Carrera', 'Buscando'],
+          rows: tableData,
+          columnWidths: [150, 150, 150, 60]
+        });
+      } else if (tipo === TipoReporte.LISTADO_OFERTAS) {
+        doc.fontSize(16).fillColor(primaryColor).text('Listado de Ofertas Laborales');
+        doc.moveDown();
+
+        const tableData = data.ofertas.map((o: any) => [
+          o.titulo,
+          o.empresa.nombre_comercial,
+          o.ciudad,
+          o.estado,
+          o._count.postulaciones.toString()
+        ]);
+
+        this.drawTable(doc, {
+          headers: ['Título', 'Empresa', 'Ciudad', 'Estado', 'Post.'],
+          rows: tableData,
+          columnWidths: [140, 120, 100, 70, 40]
+        });
+      } else if (tipo === TipoReporte.POSTULACIONES_POR_OFERTA) {
+        if (data.oferta) {
+          doc.fontSize(16).fillColor(primaryColor).text(`Postulaciones: ${data.oferta.titulo}`);
+          doc.fontSize(12).fillColor(textColor).text(`Empresa: ${data.oferta.empresa.nombre_comercial}`);
+          doc.moveDown();
+        }
+
+        const tableData = data.postulaciones.map((p: any) => [
+          `${p.egresado.nombres} ${p.egresado.apellidos}`,
+          new Date(p.fecha_postulacion).toLocaleDateString(),
+          p.estado
+        ]);
+
+        this.drawTable(doc, {
+          headers: ['Candidato', 'Fecha Postulación', 'Estado Actual'],
+          rows: tableData,
+          columnWidths: [200, 150, 120]
         });
       } else {
-        doc.text('Resumen de datos:');
-        doc.text(JSON.stringify(data, null, 2));
+        doc.text('Resumen de datos:', { underline: true });
+        doc.fontSize(10).text(JSON.stringify(data, null, 2));
+      }
+
+      // --- PIE DE PÁGINA ---
+      const range = doc.bufferedPageRange();
+      for (let i = range.start; i < range.start + range.count; i++) {
+        doc.switchToPage(i);
+        doc.rect(0, doc.page.height - 50, doc.page.width, 50).fill(lightGray);
+        doc.fillColor('#6b7280')
+           .fontSize(9)
+           .text(
+             `Página ${i + 1} de ${range.count} | Generado por el Sistema de Egresados | © ${new Date().getFullYear()}`,
+             0,
+             doc.page.height - 30,
+             { align: 'center' }
+           );
       }
 
       doc.end();
     });
+  }
+
+  private getTipoLabel(tipo: string): string {
+    const labels: Record<string, string> = {
+      OPERACIONAL: 'Reporte Operacional',
+      GESTION: 'Reporte de Gestión y Empleabilidad',
+      LISTADO_EGRESADOS: 'Listado de Egresados',
+      LISTADO_OFERTAS: 'Listado de Ofertas Laborales',
+      POSTULACIONES_POR_OFERTA: 'Detalle de Postulaciones',
+      REPORTE_EMPLEABILIDAD: 'Análisis de Empleabilidad',
+      REPORTE_DEMANDA_LABORAL: 'Demanda Laboral y Habilidades',
+      REPORTE_COMPARATIVO_COHORTE: 'Comparativo por Cohorte'
+    };
+    return labels[tipo] || tipo;
+  }
+
+  private drawStatsCards(doc: any, stats: { label: string; value: any }[]) {
+    const cardWidth = 120;
+    const cardHeight = 60;
+    const spacing = 15;
+    let x = 50;
+    let y = doc.y;
+
+    stats.forEach(stat => {
+      doc.rect(x, y, cardWidth, cardHeight)
+         .fillAndStroke('#f9fafb', '#e5e7eb');
+      
+      doc.fillColor('#6b7280').fontSize(9).text(stat.label, x + 5, y + 10, { width: cardWidth - 10, align: 'center' });
+      doc.fillColor('#111827').fontSize(14).text(stat.value.toString(), x + 5, y + 30, { width: cardWidth - 10, align: 'center' });
+      
+      x += cardWidth + spacing;
+    });
+    
+    doc.y = y + cardHeight + 20;
+  }
+
+  private drawTable(doc: any, table: { headers: string[], rows: string[][], columnWidths: number[] }) {
+    const startX = 50;
+    let currentY = doc.y;
+    const rowHeight = 25;
+    const headerColor = '#f3f4f6';
+
+    // Headers
+    doc.rect(startX, currentY, table.columnWidths.reduce((a, b) => a + b, 0), rowHeight)
+       .fill(headerColor);
+    
+    doc.fillColor('#374151').fontSize(10);
+    let currentX = startX;
+    table.headers.forEach((header, i) => {
+      doc.text(header, currentX + 5, currentY + 7, { width: table.columnWidths[i] - 10, bold: true });
+      currentX += table.columnWidths[i];
+    });
+
+    currentY += rowHeight;
+    doc.fillColor('#1f2937').fontSize(9);
+
+    // Rows
+    table.rows.forEach((row, rowIndex) => {
+      // Check for page break
+      if (currentY + rowHeight > doc.page.height - 70) {
+        doc.addPage();
+        currentY = 50;
+        
+        // Redraw headers on new page
+        doc.rect(startX, currentY, table.columnWidths.reduce((a, b) => a + b, 0), rowHeight).fill(headerColor);
+        doc.fillColor('#374151').fontSize(10);
+        let tempX = startX;
+        table.headers.forEach((header, i) => {
+          doc.text(header, tempX + 5, currentY + 7, { width: table.columnWidths[i] - 10 });
+          tempX += table.columnWidths[i];
+        });
+        currentY += rowHeight;
+        doc.fillColor('#1f2937').fontSize(9);
+      }
+
+      // Alternate background
+      if (rowIndex % 2 === 0) {
+        doc.rect(startX, currentY, table.columnWidths.reduce((a, b) => a + b, 0), rowHeight).fill('#ffffff');
+      } else {
+        doc.rect(startX, currentY, table.columnWidths.reduce((a, b) => a + b, 0), rowHeight).fill('#f9fafb');
+      }
+
+      let rowX = startX;
+      row.forEach((cell, i) => {
+        doc.text(cell || '', rowX + 5, currentY + 7, { width: table.columnWidths[i] - 10 });
+        rowX += table.columnWidths[i];
+      });
+
+      // Borders
+      doc.rect(startX, currentY, table.columnWidths.reduce((a, b) => a + b, 0), rowHeight).stroke('#e5e7eb');
+
+      currentY += rowHeight;
+    });
+
+    doc.y = currentY + 20;
   }
 
   private mapReporteResponse(reporte: any): ReporteResponse {
