@@ -4,9 +4,16 @@ import { AppRouter } from './trpc/trpc.router';
 import * as trpcExpress from '@trpc/server/adapters/express';
 import { createContext } from './trpc/context';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Servir archivos estáticos (reportes)
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+  });
 
   // Habilitar CORS para el frontend
   app.enableCors({

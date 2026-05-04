@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
         source: "/api/trpc/:path*",
         destination: "http://127.0.0.1:3001/trpc/:path*",
       },
+      {
+        source: "/uploads/:path*",
+        destination: "http://127.0.0.1:3001/uploads/:path*",
+      },
     ];
   },
 };

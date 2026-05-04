@@ -105,9 +105,10 @@ export default function ReportesPage() {
     return misReportes.data.map((r: any) => ({
       id: r.id,
       tipo: r.tipo as TipoReporte,
-      estado: r.estado.toLowerCase() as any,
-      fechaCreacion: new Date(r.createdAt).toLocaleString(),
+      estado: r.estado as any,
+      createdAt: new Date(r.createdAt),
       archivoUrl: r.archivoUrl,
+      parametros: r.parametros || {},
     }));
   }, [misReportes]);
 
