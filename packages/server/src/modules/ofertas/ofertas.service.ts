@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOfertaDto, UpdateOfertaDto, FilterOfertaDto, ModalidadOferta, TipoContrato } from './dto/create-oferta.dto';
 import { EstadoPostulacion } from './dto/postulacion.dto';
 
@@ -9,7 +9,7 @@ export class OfertasService {
 
   async create(dto: CreateOfertaDto, userId: string) {
     const empresa = await this.prisma.empresa.findUnique({
-      where: { user_id: userId },
+      where: { usuario_id: userId },
     });
 
     if (!empresa) {
@@ -35,16 +35,16 @@ export class OfertasService {
         moneda: dto.moneda || 'COP',
         ciudad: dto.ciudad,
         pais: dto.pais || 'Colombia',
-        activa: dto.activa ?? true,
+        estado: dto.activa === false ? 'cerrada' : 'activa',
         plazas_disponibles: dto.plazas_disponibles,
         fecha_cierre: dto.fecha_cierre ? new Date(dto.fecha_cierre) : null,
-        oferta_habilidad: {
+        habilidades: {
           create: habilidadesData,
         },
       },
       include: {
         empresa: true,
-        oferta_habilidad: {
+        habilidades: {
           include: {
             habilidad: true,
           },
@@ -63,7 +63,7 @@ export class OfertasService {
       throw new NotFoundException('Oferta no encontrada');
     }
 
-    if (userRole !== 'ADMIN' && oferta.empresa.user_id !== userId) {
+    if (userRole !== 'ADMIN' && oferta.empresa.usuario_id !== userId) {
       throw new ForbiddenException('No tiene permisos para editar esta oferta');
     }
 
@@ -75,7 +75,7 @@ export class OfertasService {
     return this.prisma.$transaction(async (tx) => {
       if (habilidadesData) {
         await tx.ofertaHabilidad.deleteMany({
-          where: { oferta_id: id },
+          where: { oferta_laboral_id: id },
         });
       }
 
@@ -93,16 +93,16 @@ export class OfertasService {
           moneda: dto.moneda,
           ciudad: dto.ciudad,
           pais: dto.pais,
-          activa: dto.activa,
+          estado: dto.activa === false ? 'cerrada' : 'activa',
           plazas_disponibles: dto.plazas_disponibles,
           fecha_cierre: dto.fecha_cierre ? new Date(dto.fecha_cierre) : null,
-          oferta_habilidad: habilidadesData ? {
+          habilidades: habilidadesData ? {
             create: habilidadesData,
           } : undefined,
         },
         include: {
           empresa: true,
-          oferta_habilidad: {
+          habilidades: {
             include: {
               habilidad: true,
             },
@@ -122,7 +122,7 @@ export class OfertasService {
       throw new NotFoundException('Oferta no encontrada');
     }
 
-    if (userRole !== 'ADMIN' && oferta.empresa.user_id !== userId) {
+    if (userRole !== 'ADMIN' && oferta.empresa.usuario_id !== userId) {
       throw new ForbiddenException('No tiene permisos para eliminar esta oferta');
     }
 
@@ -136,7 +136,7 @@ export class OfertasService {
       where: { id },
       include: {
         empresa: true,
-        oferta_habilidad: {
+        habilidades: {
           include: {
             habilidad: true,
           },
@@ -151,12 +151,16 @@ export class OfertasService {
     return oferta;
   }
 
-  async findAll(filters: FilterOfertaDto) {
+  async findAll(filters: FilterOfertaDto, userRole?: string) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const skip = (page - 1) * limit;
 
     const where: any = {};
+
+    if (userRole !== 'ADMIN') {
+      where.estado = 'activa';
+    }
 
     if (filters.ciudad) {
       where.ciudad = { contains: filters.ciudad, mode: 'insensitive' };
@@ -176,9 +180,7 @@ export class OfertasService {
     if (filters.salario_max) {
       where.salario_min = { lte: filters.salario_max };
     }
-    if (filters.activa !== undefined) {
-      where.activa = filters.activa;
-    }
+    
     if (filters.fecha_cierre_desde) {
       where.fecha_cierre = { ...where.fecha_cierre, gte: new Date(filters.fecha_cierre_desde) };
     }
@@ -187,7 +189,7 @@ export class OfertasService {
     }
 
     if (filters.habilidades && filters.habilidades.length > 0) {
-      where.oferta_habilidad = {
+      where.habilidades = {
         some: {
           habilidad_id: { in: filters.habilidades },
         },
@@ -199,10 +201,10 @@ export class OfertasService {
         where,
         skip,
         take: limit,
-        orderBy: { created_at: 'desc' },
+        orderBy: { creado_at: 'desc' },
         include: {
           empresa: true,
-          oferta_habilidad: {
+          habilidades: {
             include: {
               habilidad: true,
             },
@@ -225,19 +227,19 @@ export class OfertasService {
 
   async misOfertas(userId: string) {
     const empresa = await this.prisma.empresa.findUnique({
-      where: { user_id: userId },
+      where: { usuario_id: userId },
     });
 
     if (!empresa) {
       throw new ForbiddenException('Solo las empresas tienen ofertas');
     }
 
-    return this.prisma.ofertaLaboral.findMany({
+    const ofertas = await this.prisma.ofertaLaboral.findMany({
       where: { empresa_id: empresa.id },
-      orderBy: { created_at: 'desc' },
+      orderBy: { creado_at: 'desc' },
       include: {
         empresa: true,
-        oferta_habilidad: {
+        habilidades: {
           include: {
             habilidad: true,
           },
@@ -247,26 +249,32 @@ export class OfertasService {
         },
       },
     });
+
+    return ofertas.map(o => ({
+      ...o,
+      fechaPublicacion: o.creado_at,
+      postulacionesCount: o._count.postulaciones,
+    }));
   }
 
-  async postulacion(ofertaId: string, userId: string, cartaPresentacion?: string) {
+  async postulacion(offerId: string, userId: string, cartaPresentacion?: string) {
     const egresado = await this.prisma.egresado.findUnique({
-      where: { user_id: userId },
+      where: { usuario_id: userId },
     });
 
     if (!egresado) {
-      throw new ForbiddenException('Solo los egresados pueden postulár');
+      throw new ForbiddenException('Solo los egresados pueden postular');
     }
 
     const oferta = await this.prisma.ofertaLaboral.findUnique({
-      where: { id: ofertaId },
+      where: { id: offerId },
     });
 
     if (!oferta) {
       throw new NotFoundException('Oferta no encontrada');
     }
 
-    if (!oferta.activa) {
+    if (oferta.estado !== 'activa') {
       throw new BadRequestException('La oferta no está activa');
     }
 
@@ -274,12 +282,10 @@ export class OfertasService {
       throw new BadRequestException('La fecha de cierre ha pasado');
     }
 
-    const existente = await this.prisma.postulacion.findUnique({
+    const existente = await this.prisma.postulacion.findFirst({
       where: {
-        oferta_id_egresado_id: {
-          oferta_id: ofertaId,
-          egresado_id: egresado.id,
-        },
+        oferta_id: offerId,
+        egresado_id: egresado.id,
       },
     });
 
@@ -289,13 +295,18 @@ export class OfertasService {
 
     return this.prisma.postulacion.create({
       data: {
-        oferta_id: ofertaId,
+        oferta_id: offerId,
         egresado_id: egresado.id,
         carta_presentacion: cartaPresentacion,
         estado: EstadoPostulacion.POSTULADO,
+        historial_estados: {
+          create: {
+            estado_nuevo: EstadoPostulacion.POSTULADO,
+          }
+        }
       },
       include: {
-        oferta: {
+        oferta_laboral: {
           include: { empresa: true },
         },
         egresado: true,
@@ -303,54 +314,109 @@ export class OfertasService {
     });
   }
 
-  async postulacionesRecibidas(userId: string) {
-    const empresa = await this.prisma.empresa.findUnique({
-      where: { user_id: userId },
-    });
+  async postulacionesRecibidas(userId: string, userRole?: string) {
+    let where: any = {};
+    
+    if (userRole === 'ADMIN') {
+      where = {};
+    } else {
+      const empresa = await this.prisma.empresa.findUnique({
+        where: { usuario_id: userId },
+      });
 
-    if (!empresa) {
-      throw new ForbiddenException('Solo las empresas ven postulaciones');
+      if (!empresa) {
+        throw new ForbiddenException('Solo las empresas ven postulaciones');
+      }
+      where = { 
+        oferta_laboral: {
+          empresa_id: empresa.id
+        }
+      };
     }
 
-    const ofertas = await this.prisma.ofertaLaboral.findMany({
-      where: { empresa_id: empresa.id },
-      select: { id: true },
-    });
-
-    const ofertaIds = ofertas.map(o => o.id);
-
-    return this.prisma.postulacion.findMany({
-      where: { oferta_id: { in: ofertaIds } },
+    const postulaciones = await this.prisma.postulacion.findMany({
+      where,
       orderBy: { fecha_postulacion: 'desc' },
       include: {
-        oferta: {
+        oferta_laboral: {
           include: { empresa: true },
         },
         egresado: {
           include: {
-            user: { select: { email: true } },
+            usuario: { select: { email: true } },
             formacion_academica: {
               include: { carrera: true },
             },
             experiencia_laboral: true,
-            egresado_habilidad: {
+            habilidades: {
               include: { habilidad: true },
             },
           },
         },
-        postulacion_historial: {
-          orderBy: { created_at: 'desc' },
+        historial_estados: {
+          orderBy: { fecha: 'desc' },
         },
       },
     });
+
+    return postulaciones.map(p => ({
+      ...p,
+      egresadoEmail: p.egresado.usuario.email,
+      ofertaTitulo: p.oferta_laboral.titulo,
+      empresaNombre: p.oferta_laboral.empresa.nombre,
+      fechaPostulacion: p.fecha_postulacion,
+    }));
   }
 
-  async actualizarEstado(postulacionId: string, estado: string, userId: string, userRole: string, comentario?: string) {
-    const postulacion = await this.prisma.postulacion.findUnique({
-      where: { id: postulacionId },
+  async misPostulaciones(userId: string, userRole?: string) {
+    let where: any = {};
+    
+    if (userRole === 'ADMIN') {
+      // Si es admin, ve todas las postulaciones
+      where = {};
+    } else {
+      const egresado = await this.prisma.egresado.findUnique({
+        where: { usuario_id: userId },
+      });
+
+      if (!egresado) {
+        throw new ForbiddenException('Solo los egresados ven sus postulaciones');
+      }
+      where = { egresado_id: egresado.id };
+    }
+
+    const postulaciones = await this.prisma.postulacion.findMany({
+      where,
+      orderBy: { fecha_postulacion: 'desc' },
       include: {
-        oferta: { include: { empresa: true } },
-        egresado: { include: { user: true } },
+        oferta_laboral: {
+          include: { empresa: true },
+        },
+        egresado: {
+          include: { usuario: { select: { email: true } } }
+        },
+        historial_estados: {
+          orderBy: { fecha: 'desc' },
+        },
+      },
+    });
+
+    return postulaciones.map(p => ({
+      ...p,
+      ofertaId: p.oferta_id,
+      ofertaTitulo: p.oferta_laboral.titulo,
+      empresaNombre: p.oferta_laboral.empresa.nombre,
+      egresadoEmail: p.egresado?.usuario?.email,
+      fechaPostulacion: p.fecha_postulacion,
+    }));
+  }
+
+  async actualizarEstado(applicationId: string, estado: string, userId: string, userRole: string, comentario?: string) {
+    const postulacion = await this.prisma.postulacion.findUnique({
+      where: { id: applicationId },
+      include: {
+        oferta_laboral: { include: { empresa: true } },
+        egresado: { include: { usuario: true } },
       },
     });
 
@@ -358,11 +424,7 @@ export class OfertasService {
       throw new NotFoundException('Postulación no encontrada');
     }
 
-    if (userRole === 'EMPRESA' && postulacion.oferta.empresa.user_id !== userId) {
-      throw new ForbiddenException('No tiene permisos para actualizar esta postulación');
-    }
-
-    if (userRole === 'EGRESADO' && postulacion.egresado.user_id !== userId) {
+    if (userRole === 'EMPRESA' && postulacion.oferta_laboral.empresa.usuario_id !== userId) {
       throw new ForbiddenException('No tiene permisos para actualizar esta postulación');
     }
 
@@ -370,48 +432,42 @@ export class OfertasService {
 
     const result = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.postulacion.update({
-        where: { id: postulacionId },
+        where: { id: applicationId },
         data: { estado: estado as EstadoPostulacion },
         include: {
-          oferta: { include: { empresa: true } },
-          egresado: { include: { user: true } },
+          oferta_laboral: { include: { empresa: true } },
+          egresado: { include: { usuario: true } },
         },
       });
 
-      await tx.postulacionHistorial.create({
+      await tx.historialEstadoPostulacion.create({
         data: {
-          postulacion_id: postulacionId,
+          postulacion_id: applicationId,
           estado_anterior: estadoAnterior as EstadoPostulacion,
           estado_nuevo: estado as EstadoPostulacion,
           comentario,
-          cambiado_por: userId,
+          cambiado_por_id: userId,
         },
       });
 
-      const titulos: Record<string, string> = {
-        POSTULADO: 'Postulación Recibida',
-        EN_REVISION: 'Postulación en Revisión',
-        ENTREVISTA: 'Invitación a Entrevista',
-        CONTRATADO: '¡Felicidades! Has sido Contratado',
-        RECHAZADO: 'Actualización de Postulación',
-      };
-
-      const mensajes: Record<string, string> = {
-        POSTULADO: `Tu postulación para "${postulacion.oferta.titulo}" ha sido recibida.`,
-        EN_REVISION: `Tu postulación para "${postulacion.oferta.titulo}" está siendo revisada por la empresa.`,
-        ENTREVISTA: `¡Congratulations! Has sido invitado a entrevista para "${postulacion.oferta.titulo}".`,
-        CONTRATADO: `¡Felicidades! Has sido contratado para "${postulacion.oferta.titulo}".`,
-        RECHAZADO: `Tu postulación para "${postulacion.oferta.titulo}" no fue seleccionada.`,
-      };
+      if (estado === EstadoPostulacion.CONTRATADO) {
+        await tx.contratacion.create({
+          data: {
+            empresa_id: postulacion.oferta_laboral.empresa_id,
+            egresado_id: postulacion.egresado_id,
+            oferta_id: postulacion.oferta_id,
+          }
+        });
+      }
 
       await tx.notificacion.create({
         data: {
-          usuario_id: postulacion.egresado.user_id,
+          usuario_id: postulacion.egresado.usuario_id,
           tipo: 'POSTULACION',
-          titulo: titulos[estado] || 'Actualización de Postulación',
-          mensaje: mensajes[estado] || `Hubo un cambio en tu postulación para "${postulacion.oferta.titulo}".`,
+          titulo: 'Actualización de Postulación',
+          mensaje: `Hubo un cambio en tu postulación para "${postulacion.oferta_laboral.titulo}".`,
           datos_adicionales: {
-            postulacion_id: postulacionId,
+            postulacion_id: applicationId,
             oferta_id: postulacion.oferta_id,
             estado,
             comentario,

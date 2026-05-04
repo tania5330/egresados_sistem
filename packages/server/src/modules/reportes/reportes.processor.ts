@@ -60,18 +60,22 @@ export class ReportesProcessor extends WorkerHost {
     parametros: Record<string, any>,
   ): Promise<any> {
     switch (tipo) {
+      case 'OPERACIONAL':
+        return this.reportesService.getDataOperacional();
+      case 'GESTION':
+        return this.reportesService.getDataGestion();
       case 'LISTADO_EGRESADOS':
-        return this.reportesService.getDataListadoEgresados(parametros);
+        return this.reportesService.getDataListadoEgresados(parametros as any);
       case 'LISTADO_OFERTAS':
-        return this.reportesService.getDataListadoOfertas(parametros);
+        return this.reportesService.getDataListadoOfertas(parametros as any);
       case 'POSTULACIONES_POR_OFERTA':
-        return this.reportesService.getDataPostulacionesPorOferta(parametros);
+        return this.reportesService.getDataPostulacionesPorOferta(parametros as any);
       case 'REPORTE_EMPLEABILIDAD':
-        return this.reportesService.getDataReporteEmpleabilidad(parametros);
+        return this.reportesService.getDataReporteEmpleabilidad(parametros as any);
       case 'REPORTE_DEMANDA_LABORAL':
-        return this.reportesService.getDataReporteDemandaLaboral(parametros);
+        return this.reportesService.getDataReporteDemandaLaboral(parametros as any);
       case 'REPORTE_COMPARATIVO_COHORTE':
-        return this.reportesService.getDataReporteComparativoCohorte(parametros);
+        return this.reportesService.getDataReporteComparativoCohorte(parametros as any);
       default:
         throw new Error(`Unknown report type: ${tipo}`);
     }

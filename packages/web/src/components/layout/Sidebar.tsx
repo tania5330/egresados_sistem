@@ -12,15 +12,36 @@ import {
   BarChart,
   Settings,
   LogOut,
+  UserCircle,
+  FileText,
+  Bell,
+  History,
 } from "lucide-react";
 
 const navItems = [
-  { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
-  { href: "/dashboard/egresado", label: "Egresados", icon: GraduationCap, roles: ["admin"] },
-  { href: "/dashboard/empresa", label: "Empresas", icon: Building2, roles: ["admin"] },
-  { href: "/dashboard/ofertas", label: "Ofertas", icon: Briefcase, roles: ["admin", "empresa"] },
+  // --- EGRESADO ---
+  { href: "/dashboard/egresado", label: "Dashboard", icon: LayoutDashboard, roles: ["egresado"] },
+  { href: "/dashboard/perfil", label: "Mi Perfil / CV", icon: UserCircle, roles: ["egresado"] },
+  { href: "/dashboard/ofertas", label: "Ofertas", icon: Briefcase, roles: ["egresado"] },
+  { href: "/dashboard/postulaciones", label: "Mis Postulaciones", icon: FileText, roles: ["egresado"] },
+  { href: "/dashboard/notificaciones", label: "Notificaciones", icon: Bell, roles: ["egresado"] },
+
+  // --- EMPRESA ---
+  { href: "/dashboard/empresa", label: "Dashboard", icon: LayoutDashboard, roles: ["empresa"] },
+  { href: "/dashboard/mis-ofertas", label: "Mis Ofertas", icon: Briefcase, roles: ["empresa"] },
+  { href: "/dashboard/postulaciones", label: "Postulaciones", icon: FileText, roles: ["empresa"] },
+  { href: "/dashboard/buscar-egresados", label: "Buscar Egresados", icon: Users, roles: ["empresa"] },
+  { href: "/dashboard/notificaciones", label: "Notificaciones", icon: Bell, roles: ["empresa"] },
+
+  // --- ADMINISTRADOR ---
+  { href: "/dashboard/admin", label: "Dashboard General", icon: LayoutDashboard, roles: ["admin"] },
+  { href: "/dashboard/admin/egresados", label: "Egresados", icon: GraduationCap, roles: ["admin"] },
+  { href: "/dashboard/admin/empresas", label: "Empresas", icon: Building2, roles: ["admin"] },
+  { href: "/dashboard/admin/ofertas", label: "Ofertas", icon: Briefcase, roles: ["admin"] },
+  { href: "/dashboard/admin/postulaciones", label: "Postulaciones", icon: FileText, roles: ["admin"] },
   { href: "/dashboard/reportes", label: "Reportes", icon: BarChart, roles: ["admin"] },
-  { href: "/dashboard/admin", label: "Administración", icon: Settings, roles: ["admin"] },
+  { href: "/dashboard/admin/configuracion", label: "Administración", icon: Settings, roles: ["admin"] },
+  { href: "/dashboard/admin/bitacora", label: "Bitácora", icon: History, roles: ["admin"] },
 ];
 
 interface SidebarProps {

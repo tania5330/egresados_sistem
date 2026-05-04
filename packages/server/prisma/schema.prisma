@@ -1,0 +1,352 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Rol {
+  id      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre  String   @unique @db.VarChar(50) // ADMIN, EGRESADO, EMPRESA
+  usuarios Usuario[]
+
+  @@map("roles")
+}
+
+model Usuario {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String    @unique @db.VarChar(255)
+  password_hash String    @map("password") @db.VarChar(255)
+  rol_id        String    @db.Uuid
+  rol           Rol       @relation(fields: [rol_id], references: [id])
+  estado        Boolean   @default(true) @map("is_active")
+  ultimo_login  DateTime? @map("last_login_at") @db.Timestamptz
+  creado_at     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  actualizado_at DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  
+  egresado      Egresado?
+  empresa       Empresa?
+  
+  notificaciones Notificacion[]
+  reportes       Reporte[]
+  audit_logs     AuditLog[]
+  cambios_estado_postulacion HistorialEstadoPostulacion[] @relation("cambiado_por")
+
+  @@map("usuarios")
+}
+
+model Egresado {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id       String    @unique @db.Uuid @map("user_id")
+  usuario          Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  nombres          String    @db.VarChar(255)
+  apellidos        String    @db.VarChar(255)
+  telefono         String?   @db.VarChar(50)
+  fecha_nacimiento DateTime? @db.Date
+  foto_url         String?   @db.VarChar(500)
+  cv_url           String?   @db.VarChar(500)
+  biografia        String?   @db.Text
+  genero           Genero?
+  buscando_empleo  Boolean   @default(true)
+  creado_at        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  actualizado_at   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  
+  formacion_academica FormacionAcademica[]
+  experiencia_laboral ExperienciaLaboral[]
+  habilidades         EgresadoHabilidad[]
+  postulaciones       Postulacion[]
+  contrataciones      Contratacion[]
+
+  @@map("egresados")
+}
+
+model Empresa {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id  String   @unique @db.Uuid @map("user_id")
+  usuario     Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  nombre      String   @db.VarChar(255)
+  nit         String   @unique @db.VarChar(50)
+  sector      String?  @db.VarChar(100)
+  telefono    String?  @db.VarChar(50)
+  direccion   String?  @db.Text
+  logo_url    String?  @db.VarChar(500)
+  descripcion String?  @db.Text
+  ciudad      String?  @db.VarChar(100)
+  pais        String?  @default("Colombia") @db.VarChar(100)
+  verificada  Boolean  @default(false)
+  creado_at   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  actualizado_at DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  
+  ofertas_laborales OfertaLaboral[]
+  contrataciones    Contratacion[]
+
+  @@map("empresas")
+}
+
+model OfertaLaboral {
+  id                 String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresa_id         String          @db.Uuid
+  empresa            Empresa         @relation(fields: [empresa_id], references: [id], onDelete: Cascade)
+  titulo             String          @db.VarChar(255)
+  descripcion        String          @db.Text
+  requisitos         String?         @db.Text
+  beneficios         String?         @db.Text
+  modalidad          ModalidadOferta @default(PRESENCIAL)
+  tipo_contrato      TipoContrato    @default(TIEMPO_COMPLETO)
+  salario_min        Decimal?        @db.Decimal(12, 2)
+  salario_max        Decimal?        @db.Decimal(12, 2)
+  moneda             String?         @default("COP") @db.VarChar(10)
+  ciudad             String?         @db.VarChar(100)
+  pais               String?         @default("Colombia") @db.VarChar(100)
+  estado             String          @default("activa") @db.VarChar(20) // activa, cerrada
+  plazas_disponibles Int             @default(1)
+  fecha_cierre       DateTime?       @db.Date
+  creado_at          DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  actualizado_at     DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  
+  habilidades    OfertaHabilidad[]
+  postulaciones  Postulacion[]
+  contrataciones Contratacion[]
+
+  @@map("ofertas_laborales")
+}
+
+model Postulacion {
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  oferta_id          String            @db.Uuid
+  oferta_laboral     OfertaLaboral     @relation(fields: [oferta_id], references: [id], onDelete: Cascade)
+  egresado_id        String            @db.Uuid
+  egresado           Egresado          @relation(fields: [egresado_id], references: [id], onDelete: Cascade)
+  estado             EstadoPostulacion @default(POSTULADO)
+  carta_presentacion String?           @db.Text
+  fecha_postulacion  DateTime          @default(now()) @db.Timestamptz
+  actualizado_at     DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  
+  historial_estados HistorialEstadoPostulacion[]
+
+  @@unique([oferta_id, egresado_id])
+  @@map("postulaciones")
+}
+
+model HistorialEstadoPostulacion {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  postulacion_id String            @db.Uuid
+  postulacion    Postulacion       @relation(fields: [postulacion_id], references: [id], onDelete: Cascade)
+  estado_anterior EstadoPostulacion?
+  estado_nuevo    EstadoPostulacion
+  comentario      String?           @db.Text
+  cambiado_por_id String?           @db.Uuid
+  cambiado_por    Usuario?          @relation("cambiado_por", fields: [cambiado_por_id], references: [id], onDelete: SetNull)
+  fecha           DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("historial_estado_postulacion")
+}
+
+model Contratacion {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  empresa_id   String        @db.Uuid
+  empresa      Empresa       @relation(fields: [empresa_id], references: [id], onDelete: Cascade)
+  egresado_id  String        @db.Uuid
+  egresado     Egresado      @relation(fields: [egresado_id], references: [id], onDelete: Cascade)
+  oferta_id    String?       @db.Uuid
+  oferta_laboral OfertaLaboral? @relation(fields: [oferta_id], references: [id], onDelete: SetNull)
+  fecha        DateTime      @default(now()) @db.Timestamptz
+
+  @@map("contrataciones")
+}
+
+model FormacionAcademica {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  egresado_id    String    @db.Uuid
+  egresado       Egresado  @relation(fields: [egresado_id], references: [id], onDelete: Cascade)
+  institucion    String    @db.VarChar(255)
+  titulo         String    @db.VarChar(255)
+  carrera_nombre String?   @map("carrera") @db.VarChar(255)
+  carrera_id     String?   @db.Uuid
+  carrera        Carrera?  @relation(fields: [carrera_id], references: [id], onDelete: SetNull)
+  fecha_inicio   DateTime  @db.Date
+  fecha_fin      DateTime? @db.Date
+  culminada      Boolean   @default(true)
+  creado_at      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  actualizado_at DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("formacion_academica")
+}
+
+model ExperienciaLaboral {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  egresado_id    String    @db.Uuid
+  egresado       Egresado  @relation(fields: [egresado_id], references: [id], onDelete: Cascade)
+  empresa        String    @db.VarChar(255)
+  cargo          String    @db.VarChar(255)
+  descripcion    String?   @db.Text
+  fecha_inicio   DateTime  @db.Date
+  fecha_fin      DateTime? @db.Date
+  trabajo_actual Boolean   @default(false)
+  creado_at      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  actualizado_at DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("experiencia_laboral")
+}
+
+model Habilidad {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre            String          @unique @db.VarChar(100)
+  tipo              TipoHabilidad
+  categoria         String?         @db.VarChar(100)
+  creado_at         DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  habilidades_egresado EgresadoHabilidad[]
+  habilidades_oferta   OfertaHabilidad[]
+
+  @@map("habilidades")
+}
+
+model EgresadoHabilidad {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  egresado_id  String         @db.Uuid
+  egresado     Egresado       @relation(fields: [egresado_id], references: [id], onDelete: Cascade)
+  habilidad_id String         @db.Uuid
+  habilidad    Habilidad      @relation(fields: [habilidad_id], references: [id], onDelete: Cascade)
+  nivel        NivelHabilidad @default(INTERMEDIO)
+  creado_at    DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([egresado_id, habilidad_id])
+  @@map("egresado_habilidad")
+}
+
+model OfertaHabilidad {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  oferta_laboral_id String    @db.Uuid @map("oferta_id")
+  oferta_laboral    OfertaLaboral @relation(fields: [oferta_laboral_id], references: [id], onDelete: Cascade)
+  habilidad_id      String    @db.Uuid
+  habilidad         Habilidad @relation(fields: [habilidad_id], references: [id], onDelete: Cascade)
+  obligatoria       Boolean   @default(true)
+  creado_at         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([oferta_laboral_id, habilidad_id])
+  @@map("oferta_habilidad")
+}
+
+model Notificacion {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id        String    @db.Uuid
+  usuario           Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  tipo              String    @db.VarChar(50)
+  titulo            String    @db.VarChar(255)
+  mensaje           String    @db.Text
+  datos_adicionales Json?
+  leida             Boolean   @default(false)
+  creado_at         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("notificaciones")
+}
+
+model Reporte {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id    String        @db.Uuid
+  usuario       Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  tipo          String        @db.VarChar(50)
+  parametros    Json?
+  archivo_url   String?       @db.VarChar(500)
+  estado        EstadoReporte @default(PENDIENTE)
+  fecha_inicio  DateTime?     @db.Timestamptz
+  fecha_fin     DateTime?     @db.Timestamptz
+  error_mensaje String?       @db.Text
+  creado_at     DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  actualizado_at DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("reportes")
+}
+
+model AuditLog {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id       String?  @db.Uuid
+  usuario          Usuario? @relation(fields: [usuario_id], references: [id], onDelete: SetNull)
+  accion           String   @db.VarChar(100)
+  entidad          String   @db.VarChar(100)
+  entidad_id       String?  @db.Uuid
+  datos_anteriores Json?
+  datos_nuevos     Json?
+  ip_address       String?  @db.VarChar(45)
+  creado_at        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("audit_logs")
+}
+
+model Facultad {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre     String    @db.VarChar(255)
+  codigo     String    @unique @db.VarChar(20)
+  creado_at  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  actualizado_at DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  carreras   Carrera[]
+
+  @@map("facultades")
+}
+
+model Carrera {
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre              String               @db.VarChar(255)
+  codigo              String               @unique @db.VarChar(20)
+  facultad_id         String?              @db.Uuid
+  facultad            Facultad?            @relation(fields: [facultad_id], references: [id], onDelete: SetNull)
+  creado_at           DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  actualizado_at      DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  formacion_academica FormacionAcademica[]
+
+  @@map("carreras")
+}
+
+enum Genero {
+  M
+  F
+  O
+}
+
+enum NivelHabilidad {
+  BASICO
+  INTERMEDIO
+  AVANZADO
+  EXPERTO
+}
+
+enum TipoHabilidad {
+  TECNICA
+  BLANDA
+}
+
+enum ModalidadOferta {
+  PRESENCIAL
+  REMOTO
+  HIBRIDO
+}
+
+enum TipoContrato {
+  TIEMPO_COMPLETO
+  PARCIAL
+  POR_HORA
+  PROYECTO
+}
+
+enum EstadoPostulacion {
+  POSTULADO
+  EN_REVISION
+  ENTREVISTA
+  CONTRATADO
+  RECHAZADO
+}
+
+enum EstadoReporte {
+  PENDIENTE
+  PROCESANDO
+  COMPLETADO
+  ERROR
+}
+
+enum UserRole {
+  ADMIN
+  EGRESADO
+  EMPRESA
+}

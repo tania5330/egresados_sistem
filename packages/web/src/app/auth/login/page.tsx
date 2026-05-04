@@ -2,16 +2,32 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { trpc } from "@/lib/trpc/react";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const loginMutation = trpc.auth.login.useMutation({
+    onSuccess: (data) => {
+      // Guardar tokens en localStorage para simplicidad en local
+      localStorage.setItem("accessToken", data.accessToken);
+      localStorage.setItem("refreshToken", data.refreshToken);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      
+      router.push("/dashboard");
+    },
+    onError: (err) => {
+      setError(err.message || "Error al iniciar sesión");
+    },
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement authentication
-    router.push("/dashboard");
+    setError("");
+    loginMutation.mutate({ email, password });
   };
 
   return (
@@ -23,6 +39,13 @@ export default function LoginPage() {
             Ingresa tus credenciales para acceder al sistema
           </p>
         </div>
+        
+        {error && (
+          <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">

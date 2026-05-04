@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Calendar } from "lucide-react";
 import { KpiCards } from "@/components/dashboard/admin/KpiCards";
 import { OfertasPorMesChart } from "@/components/dashboard/admin/OfertasPorMesChart";
@@ -9,36 +9,7 @@ import { DemandaHabilidadesChart } from "@/components/dashboard/admin/DemandaHab
 import { TasaContratacionCohorteChart } from "@/components/dashboard/admin/TasaContratacionCohorteChart";
 import { MapaCalor } from "@/components/dashboard/admin/MapaCalor";
 import { Filters, type DashboardFilters } from "@/components/dashboard/admin/Filters";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { mockDashboardData } from "@/components/dashboard/admin/mockData";
-import type { AdminDashboard } from "@/components/dashboard/admin/types";
-
-const CARRERAS = [
-  { id: "1", nombre: "Ingeniería de Sistemas" },
-  { id: "2", nombre: "Ingeniería Industrial" },
-  { id: "3", nombre: "Administración de Empresas" },
-  { id: "4", nombre: "Contaduría Pública" },
-  { id: "5", nombre: "Derecho" },
-  { id: "6", nombre: "Comunicación Social" },
-  { id: "7", nombre: "Psicología" },
-];
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
+import { trpc } from "@/lib/trpc/react";
 
 export default function AdminDashboardPage() {
   const [filters, setFilters] = useState<DashboardFilters>({
@@ -47,55 +18,24 @@ export default function AdminDashboardPage() {
     carreraId: "",
   });
 
-  const debouncedFilters = useDebounce(filters, 500);
+  const { data, isLoading, refetch } = trpc.dashboard.getAdminDashboard.useQuery({
+    fechaInicio: filters.fechaInicio || undefined,
+    fechaFin: filters.fechaFin || undefined,
+    carreraId: filters.carreraId || undefined,
+  });
 
-  const [data, setData] = useState<AdminDashboard | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [useMockData, setUseMockData] = useState(true);
-
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-
-      if (useMockData) {
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        setData(mockDashboardData);
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        setData(mockDashboardData);
-      } catch {
-        setData(mockDashboardData);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
-  }, [useMockData, debouncedFilters]);
+  const invalidateMutation = trpc.dashboard.invalidateCache.useMutation({
+    onSuccess: () => refetch()
+  });
 
   const filteredData = useMemo(() => {
     if (!data) return null;
+    return data;
+  }, [data]);
 
-    let filtered = { ...data };
-
-    if (debouncedFilters.carreraId) {
-      filtered = {
-        ...filtered,
-        distribucionEgresados: filtered.distribucionEgresados.filter(
-          (d) => d.carrera_id === debouncedFilters.carreraId
-        ),
-        tasaContratacionCohorte: filtered.tasaContratacionCohorte.filter(
-          (t) => t.carrera.includes(CARRERAS.find((c) => c.id === debouncedFilters.carreraId)?.nombre ?? "")
-        ),
-      };
-    }
-
-    return filtered;
-  }, [data, debouncedFilters]);
+  if (isLoading) {
+    return <div>Cargando dashboard de administrador...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -105,17 +45,21 @@ export default function AdminDashboardPage() {
           <p className="text-muted-foreground">Resumen y métricas del sistema</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Modo:</span>
-          <button
-            onClick={() => setUseMockData(!useMockData)}
-            className="rounded-md bg-secondary px-3 py-1.5 text-sm font-medium hover:bg-secondary/80"
+          <button 
+            onClick={() => invalidateMutation.mutate({})}
+            className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            disabled={invalidateMutation.isPending}
           >
-            {useMockData ? "Datos de prueba" : "Modo tRPC"}
+            {invalidateMutation.isPending ? "Actualizando..." : "Actualizar Datos"}
           </button>
         </div>
       </div>
 
-      <Filters onFiltersChange={setFilters} carreras={CARRERAS} isLoading={isLoading} />
+      <Filters 
+        onFiltersChange={setFilters} 
+        carreras={[]} 
+        isLoading={isLoading} 
+      />
 
       <KpiCards data={filteredData?.kpis} isLoading={isLoading} />
 

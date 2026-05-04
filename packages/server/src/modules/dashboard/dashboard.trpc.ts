@@ -1,14 +1,20 @@
-import { initTRPC, TRPCError } from '@trpc/server';
+import { Injectable } from '@nestjs/common';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { DashboardService } from './dashboard.service';
 import { UserRole } from '../auth/dto/auth.dto';
 import { AdminDashboardFiltersDto, EmpresaDashboardFiltersDto, EgresadoDashboardFiltersDto } from './dto/dashboard-filters.dto';
+import { TrpcService } from '../../trpc/trpc.service';
 
-const t = initTRPC.create();
+@Injectable()
+export class DashboardTrpc {
+  constructor(
+    private trpc: TrpcService,
+    private dashboardService: DashboardService,
+  ) {}
 
-export const dashboardRouter = (dashboardService: DashboardService) =>
-  t.router({
-    getAdminDashboard: t.procedure
+  router = this.trpc.router({
+    getAdminDashboard: this.trpc.protectedProcedure
       .input(
         z.object({
           fechaInicio: z.string().optional(),
@@ -24,7 +30,7 @@ export const dashboardRouter = (dashboardService: DashboardService) =>
         }),
       )
       .query(async ({ ctx, input }) => {
-        if (!ctx.user || ctx.user.role !== UserRole.ADMIN) {
+        if (ctx.user.role !== UserRole.ADMIN) {
           throw new TRPCError({
             code: 'FORBIDDEN',
             message: 'Acceso solo para administradores',
@@ -45,7 +51,7 @@ export const dashboardRouter = (dashboardService: DashboardService) =>
         };
 
         try {
-          return await dashboardService.getAdminDashboard(filters);
+          return await this.dashboardService.getAdminDashboard(filters);
         } catch (error: any) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -54,7 +60,7 @@ export const dashboardRouter = (dashboardService: DashboardService) =>
         }
       }),
 
-    getEmpresaDashboard: t.procedure
+    getEmpresaDashboard: this.trpc.protectedProcedure
       .input(
         z.object({
           fechaInicio: z.string().optional(),
@@ -64,25 +70,13 @@ export const dashboardRouter = (dashboardService: DashboardService) =>
         }),
       )
       .query(async ({ ctx, input }) => {
-        if (!ctx.user) {
-          throw new TRPCError({
-            code: 'UNAUTHORIZED',
-            message: 'No autenticado',
-          });
-        }
-
-        if (ctx.user.role !== UserRole.EMPRESA) {
+        // Permitir si es ADMIN o si es EMPRESA con perfil vinculado
+        const empresaId = ctx.user.empresa?.id;
+        
+        if (ctx.user.role !== UserRole.ADMIN && !empresaId) {
           throw new TRPCError({
             code: 'FORBIDDEN',
-            message: 'Acceso solo para empresas',
-          });
-        }
-
-        const empresaId = ctx.user.empresa?.id;
-        if (!empresaId) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Perfil de empresa no encontrado',
+            message: 'No se encontró perfil de empresa vinculado a este usuario',
           });
         }
 
@@ -94,7 +88,8 @@ export const dashboardRouter = (dashboardService: DashboardService) =>
         };
 
         try {
-          return await dashboardService.getEmpresaDashboard(empresaId, filters);
+          if (!empresaId) return null;
+          return await this.dashboardService.getEmpresaDashboard(empresaId, filters);
         } catch (error: any) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -103,7 +98,7 @@ export const dashboardRouter = (dashboardService: DashboardService) =>
         }
       }),
 
-    getEgresadoDashboard: t.procedure
+    getEgresadoDashboard: this.trpc.protectedProcedure
       .input(
         z.object({
           fechaInicio: z.string().optional(),
@@ -112,25 +107,12 @@ export const dashboardRouter = (dashboardService: DashboardService) =>
         }),
       )
       .query(async ({ ctx, input }) => {
-        if (!ctx.user) {
-          throw new TRPCError({
-            code: 'UNAUTHORIZED',
-            message: 'No autenticado',
-          });
-        }
+        const egresadoId = ctx.user.egresado?.id;
 
-        if (ctx.user.role !== UserRole.EGRESADO) {
+        if (ctx.user.role !== UserRole.ADMIN && !egresadoId) {
           throw new TRPCError({
             code: 'FORBIDDEN',
-            message: 'Acceso solo para egresados',
-          });
-        }
-
-        const egresadoId = ctx.user.egresado?.id;
-        if (!egresadoId) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Perfil de egresado no encontrado',
+            message: 'No se encontró perfil de egresado vinculado a este usuario',
           });
         }
 
@@ -141,7 +123,8 @@ export const dashboardRouter = (dashboardService: DashboardService) =>
         };
 
         try {
-          return await dashboardService.getEgresadoDashboard(egresadoId, filters);
+          if (!egresadoId) return null;
+          return await this.dashboardService.getEgresadoDashboard(egresadoId, filters);
         } catch (error: any) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -149,31 +132,5 @@ export const dashboardRouter = (dashboardService: DashboardService) =>
           });
         }
       }),
-
-    invalidateCache: t.procedure
-      .input(
-        z.object({
-          pattern: z.string().optional(),
-        }),
-      )
-      .mutation(async ({ ctx, input }) => {
-        if (!ctx.user || ctx.user.role !== UserRole.ADMIN) {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'Acceso solo para administradores',
-          });
-        }
-
-        try {
-          await dashboardService.invalidateCache(input.pattern);
-          return { success: true, message: 'Caché invalidado correctamente' };
-        } catch (error: any) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: error.message || 'Error al invalidar caché',
-          });
-        }
-      }),
   });
-
-export type DashboardRouter = ReturnType<typeof dashboardRouter>;
+}

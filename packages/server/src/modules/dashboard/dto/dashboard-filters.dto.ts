@@ -38,6 +38,13 @@ export class DashboardFiltersDto extends DateRangeDto {
   @Min(2020)
   @Max(2030)
   anioEgreso?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  @Min(1)
+  @Max(100)
+  limite?: number;
 }
 
 export class AdminDashboardFiltersDto extends DashboardFiltersDto {

@@ -115,7 +115,7 @@ export class ReportesQueue implements OnModuleInit, OnModuleDestroy {
       return false;
     }
 
-    await job.cancel();
+    await job.remove();
     return true;
   }
 

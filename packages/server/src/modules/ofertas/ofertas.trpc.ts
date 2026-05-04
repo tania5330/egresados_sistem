@@ -1,171 +1,109 @@
-import { initTRPC, TRPCError } from '@trpc/server';
+import { Injectable } from '@nestjs/common';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { OfertasService } from './ofertas.service';
-import { ModalidadOferta, TipoContrato, FilterOfertaDto } from './dto/create-oferta.dto';
-import { EstadoPostulacion } from './dto/postulacion.dto';
+import { CreateOfertaSchema, UpdateOfertaSchema, FilterOfertaSchema } from './dto/oferta.schema';
+import { TrpcService } from '../../trpc/trpc.service';
 
-const t = initTRPC.create();
+@Injectable()
+export class OfertasTrpc {
+  constructor(
+    private trpc: TrpcService,
+    private service: OfertasService,
+  ) {}
 
-export const ofertasRouter = (ofertasService: OfertasService) =>
-  t.router({
-    list: t.procedure
-      .input(
-        z.object({
-          ciudad: z.string().optional(),
-          pais: z.string().optional(),
-          modalidad: z.nativeEnum(ModalidadOferta).optional(),
-          tipo_contrato: z.nativeEnum(TipoContrato).optional(),
-          salario_min: z.number().optional(),
-          salario_max: z.number().optional(),
-          habilidades: z.array(z.string()).optional(),
-          fecha_cierre_desde: z.string().optional(),
-          fecha_cierre_hasta: z.string().optional(),
-          activa: z.boolean().optional(),
-          page: z.number().optional(),
-          limit: z.number().optional(),
-        }),
-      )
+  router = this.trpc.router({
+    list: this.trpc.protectedProcedure
+      .input(FilterOfertaSchema)
       .query(async ({ input, ctx }) => {
-        if (!ctx.user) {
-          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'No autenticado' });
-        }
-        return ofertasService.findAll(input as FilterOfertaDto);
+        return this.service.findAll(input as any, ctx.user?.role);
       }),
 
-    byId: t.procedure
+    byId: this.trpc.protectedProcedure
       .input(z.object({ id: z.string() }))
-      .query(async ({ input, ctx }) => {
-        if (!ctx.user) {
-          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'No autenticado' });
-        }
-        return ofertasService.findById(input.id);
+      .query(async ({ input }) => {
+        return this.service.findById(input.id);
       }),
 
-    misOfertas: t.procedure
+    misOfertas: this.trpc.protectedProcedure
       .input(z.object({}))
       .query(async ({ ctx }) => {
-        if (!ctx.user) {
-          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'No autenticado' });
-        }
-        return ofertasService.misOfertas(ctx.user.id);
+        return this.service.misOfertas(ctx.user.id);
       }),
 
-    postulacionesRecibidas: t.procedure
+    postulacionesRecibidas: this.trpc.protectedProcedure
       .input(z.object({}))
       .query(async ({ ctx }) => {
-        if (!ctx.user) {
-          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'No autenticado' });
-        }
         if (ctx.user.role !== 'EMPRESA' && ctx.user.role !== 'ADMIN') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Solo empresas o admins' });
         }
-        return ofertasService.postulacionesRecibidas(ctx.user.id);
+        return this.service.postulacionesRecibidas(ctx.user.id, ctx.user.role);
       }),
 
-    create: t.procedure
-      .input(
-        z.object({
-          titulo: z.string().min(1, 'Título es requerido'),
-          descripcion: z.string().min(1, 'Descripción es requerida'),
-          requisitos: z.string().optional(),
-          beneficios: z.string().optional(),
-          modalidad: z.nativeEnum(ModalidadOferta),
-          tipo_contrato: z.nativeEnum(TipoContrato),
-          salario_min: z.number().optional(),
-          salario_max: z.number().optional(),
-          moneda: z.string().optional(),
-          ciudad: z.string().optional(),
-          pais: z.string().optional(),
-          activa: z.boolean().optional(),
-          plazas_disponibles: z.number().min(1),
-          fecha_cierre: z.string().optional(),
-          habilidades: z.array(z.object({ id: z.string(), obligatoria: z.boolean() })).optional(),
-        }),
-      )
+    misPostulaciones: this.trpc.protectedProcedure
+      .input(z.object({}))
+      .query(async ({ ctx }) => {
+        return this.service.misPostulaciones(ctx.user.id, ctx.user.role);
+      }),
+
+    create: this.trpc.protectedProcedure
+      .input(CreateOfertaSchema)
       .mutation(async ({ input, ctx }) => {
-        if (!ctx.user) {
-          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'No autenticado' });
-        }
         if (ctx.user.role !== 'EMPRESA' && ctx.user.role !== 'ADMIN') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Solo empresas o admins' });
         }
-        return ofertasService.create(input as any, ctx.user.id);
+        return this.service.create(input as any, ctx.user.id);
       }),
 
-    update: t.procedure
+    update: this.trpc.protectedProcedure
       .input(
         z.object({
           id: z.string(),
-          titulo: z.string().optional(),
-          descripcion: z.string().optional(),
-          requisitos: z.string().optional(),
-          beneficios: z.string().optional(),
-          modalidad: z.nativeEnum(ModalidadOferta).optional(),
-          tipo_contrato: z.nativeEnum(TipoContrato).optional(),
-          salario_min: z.number().optional(),
-          salario_max: z.number().optional(),
-          moneda: z.string().optional(),
-          ciudad: z.string().optional(),
-          pais: z.string().optional(),
-          activa: z.boolean().optional(),
-          plazas_disponibles: z.number().optional(),
-          fecha_cierre: z.string().optional(),
-          habilidades: z.array(z.object({ id: z.string(), obligatoria: z.boolean() })).optional(),
+          data: UpdateOfertaSchema,
         }),
       )
       .mutation(async ({ input, ctx }) => {
-        if (!ctx.user) {
-          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'No autenticado' });
+        if (ctx.user.role !== 'EMPRESA' && ctx.user.role !== 'ADMIN') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Solo empresas o admins' });
         }
-        return ofertasService.update(input.id, input as any, ctx.user.id, ctx.user.role);
+        return this.service.update(input.id, input.data as any, ctx.user.id, ctx.user.role);
       }),
 
-    delete: t.procedure
+    delete: this.trpc.protectedProcedure
       .input(z.object({ id: z.string() }))
       .mutation(async ({ input, ctx }) => {
-        if (!ctx.user) {
-          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'No autenticado' });
+        if (ctx.user.role !== 'EMPRESA' && ctx.user.role !== 'ADMIN') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Solo empresas o admins' });
         }
-        return ofertasService.delete(input.id, ctx.user.id, ctx.user.role);
+        return this.service.delete(input.id, ctx.user.id, ctx.user.role);
       }),
 
-    postulacion: t.procedure
-      .input(
-        z.object({
-          oferta_id: z.string(),
-          carta_presentacion: z.string().optional(),
-        }),
-      )
+    postular: this.trpc.protectedProcedure
+      .input(z.object({ 
+        ofertaId: z.string(), 
+        cartaPresentacion: z.string().optional() 
+      }))
       .mutation(async ({ input, ctx }) => {
-        if (!ctx.user) {
-          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'No autenticado' });
+        if (ctx.user.role !== 'EGRESADO') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Solo egresados pueden postular' });
         }
-        if (ctx.user.role !== 'EGRESADO' && ctx.user.role !== 'ADMIN') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Solo egresados' });
-        }
-        return ofertasService.postulacion(input.oferta_id, ctx.user.id, input.carta_presentacion);
+        return this.service.postulacion(input.ofertaId, ctx.user.id, input.cartaPresentacion);
       }),
 
-    actualizarEstado: t.procedure
-      .input(
-        z.object({
-          postulacion_id: z.string(),
-          estado: z.enum(['POSTULADO', 'EN_REVISION', 'ENTREVISTA', 'CONTRATADO', 'RECHAZADO']),
-          comentario: z.string().optional(),
-        }),
-      )
+    actualizarEstadoPostulacion: this.trpc.protectedProcedure
+      .input(z.object({
+        postulacionId: z.string(),
+        estado: z.string(),
+        comentario: z.string().optional(),
+      }))
       .mutation(async ({ input, ctx }) => {
-        if (!ctx.user) {
-          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'No autenticado' });
-        }
-        return ofertasService.actualizarEstado(
-          input.postulacion_id,
-          input.estado,
-          ctx.user.id,
-          ctx.user.role,
-          input.comentario,
+        return this.service.actualizarEstado(
+          input.postulacionId, 
+          input.estado, 
+          ctx.user.id, 
+          ctx.user.role, 
+          input.comentario
         );
       }),
   });
-
-export type OfertasRouter = ReturnType<typeof ofertasRouter>;
+}

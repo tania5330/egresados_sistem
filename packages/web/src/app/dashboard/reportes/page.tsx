@@ -8,6 +8,9 @@ import { ReportPreview } from "@/components/reportes/ReportPreview";
 import { ReportActions } from "@/components/reportes/ReportActions";
 import { ReportHistory, ReportHistoryItem } from "@/components/reportes/ReportHistory";
 
+import { trpc } from "@/lib/trpc/react";
+import { toast } from "sonner";
+
 type ReportStatus = "idle" | "generating" | "completed" | "error";
 
 export default function ReportesPage() {
@@ -18,7 +21,52 @@ export default function ReportesPage() {
   const [downloadUrl, setDownloadUrl] = React.useState<string | null>(null);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [historyPage, setHistoryPage] = React.useState(1);
-  const [history] = React.useState<ReportHistoryItem[]>([]);
+
+  const utils = trpc.useUtils();
+
+  const { data: misReportes, isLoading: isLoadingHistory } = trpc.reportes.getMisReportes.useQuery({
+    page: historyPage,
+    limit: 10,
+  });
+
+  const generarMutation = trpc.reportes.generar.useMutation({
+    onSuccess: (data) => {
+      setCurrentReportId(data.reporteId);
+      setReportStatus("generating");
+      toast.success("Generando reporte...");
+    },
+    onError: (error) => {
+      setReportStatus("error");
+      setErrorMessage(error.message);
+      toast.error("Error al solicitar el reporte");
+    }
+  });
+
+  // Polling para el estado del reporte
+  React.useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (reportStatus === "generating" && currentReportId) {
+      interval = setInterval(async () => {
+        try {
+          const status = await utils.client.reportes.getEstado.query({ id: currentReportId });
+          if (status.estado === "COMPLETADO") {
+            setReportStatus("completed");
+            setDownloadUrl(status.archivoUrl);
+            utils.reportes.getMisReportes.invalidate();
+            toast.success("Reporte generado con éxito");
+            clearInterval(interval);
+          } else if (status.estado === "ERROR") {
+            setReportStatus("error");
+            setErrorMessage(status.errorMensaje || "Error desconocido");
+            clearInterval(interval);
+          }
+        } catch (error) {
+          console.error("Error polling report status", error);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [reportStatus, currentReportId, utils]);
 
   const handleFiltersChange = React.useCallback((newFilters: Record<string, unknown>) => {
     setFilters(newFilters);
@@ -26,20 +74,11 @@ export default function ReportesPage() {
 
   const handleGenerate = React.useCallback(async () => {
     if (!selectedType) return;
-
-    setReportStatus("generating");
-    setErrorMessage(null);
-
-    setTimeout(() => {
-      const fakeReportId = `report-${Date.now()}`;
-      setCurrentReportId(fakeReportId);
-
-      setTimeout(() => {
-        setReportStatus("completed");
-        setDownloadUrl(`/api/reportes/${fakeReportId}/download`);
-      }, 2000);
-    }, 1500);
-  }, [selectedType]);
+    generarMutation.mutate({
+      tipo: selectedType as any,
+      filtros: filters,
+    });
+  }, [selectedType, filters, generarMutation]);
 
   const handleDownload = React.useCallback(() => {
     if (downloadUrl) {
@@ -51,13 +90,26 @@ export default function ReportesPage() {
     console.log("Programar reporte", { type: selectedType, filters });
   }, [selectedType, filters]);
 
-  const handleDownloadHistory = React.useCallback((reportId: string) => {
-    console.log("Descargar reporte del historial", reportId);
+  const handleDownloadHistory = React.useCallback((archivoUrl: string) => {
+    if (archivoUrl) {
+      window.open(archivoUrl, "_blank");
+    }
   }, []);
 
   const handleHistoryPageChange = React.useCallback((page: number) => {
     setHistoryPage(page);
   }, []);
+
+  const history = React.useMemo(() => {
+    if (!misReportes) return [];
+    return misReportes.data.map((r: any) => ({
+      id: r.id,
+      tipo: r.tipo as TipoReporte,
+      estado: r.estado.toLowerCase() as any,
+      fechaCreacion: new Date(r.createdAt).toLocaleString(),
+      archivoUrl: r.archivoUrl,
+    }));
+  }, [misReportes]);
 
   const previewData = React.useMemo(() => {
     if (!selectedType) return null;
@@ -151,11 +203,14 @@ export default function ReportesPage() {
             history={history}
             pagination={{
               page: historyPage,
-              totalPages: 5,
-              total: history.length,
+              totalPages: misReportes?.meta.totalPages || 1,
+              total: misReportes?.meta.total || 0,
             }}
             onPageChange={handleHistoryPageChange}
-            onDownload={handleDownloadHistory}
+            onDownload={(id) => {
+              const report = history.find(h => h.id === id);
+              if (report?.archivoUrl) handleDownloadHistory(report.archivoUrl);
+            }}
           />
         </div>
       </div>

@@ -1,20 +1,26 @@
 import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
-import { LoginDto, RegisterDto, RegisterEgresadoDto, RegisterEmpresaDto, UserRole } from './dto/auth.dto';
+import { LoginDto, RegisterDto, RegisterEgresadoDto, RegisterEmpresaDto } from './dto/auth.dto';
 
-interface TokenPair {
+export interface AuthResponse {
   accessToken: string;
   refreshToken: string;
+  user: {
+    id: string;
+    email: string;
+    role: string;
+    profileId?: string;
+  };
 }
 
-interface UserWithProfile {
+export interface UsuarioConPerfil {
   id: string;
   email: string;
-  role: UserRole;
-  is_active: boolean;
-  created_at: Date;
+  rol: { nombre: string };
+  estado: boolean;
+  creado_at: Date;
   egresado?: { id: string } | null;
   empresa?: { id: string } | null;
 }
@@ -26,34 +32,39 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async login(dto: LoginDto): Promise<TokenPair> {
-    const user = await this.prisma.user.findUnique({
+  async login(dto: LoginDto): Promise<AuthResponse> {
+    const usuario = await this.prisma.usuario.findUnique({
       where: { email: dto.email },
+      include: {
+        rol: true,
+        egresado: { select: { id: true } },
+        empresa: { select: { id: true } },
+      }
     });
 
-    if (!user) {
+    if (!usuario) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    if (!user.is_active) {
+    if (!usuario.estado) {
       throw new UnauthorizedException('Usuario inactivo');
     }
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.password_hash);
+    const isPasswordValid = await bcrypt.compare(dto.password, usuario.password_hash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { last_login_at: new Date() },
+    await this.prisma.usuario.update({
+      where: { id: usuario.id },
+      data: { ultimo_login: new Date() },
     });
 
-    return this.generateTokens(user);
+    return this.generateAuthResponse(usuario as any);
   }
 
-  async register(dto: RegisterDto): Promise<TokenPair> {
-    const existingUser = await this.prisma.user.findUnique({
+  async register(dto: RegisterDto): Promise<AuthResponse> {
+    const existingUser = await this.prisma.usuario.findUnique({
       where: { email: dto.email },
     });
 
@@ -61,29 +72,32 @@ export class AuthService {
       throw new ConflictException('El email ya está registrado');
     }
 
+    const rol = await this.prisma.rol.findUnique({
+      where: { nombre: dto.role },
+    });
+
+    if (!rol) {
+      throw new BadRequestException('Rol no válido');
+    }
+
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    const user = await this.prisma.user.create({
+    const usuario = await this.prisma.usuario.create({
       data: {
         email: dto.email,
         password_hash: passwordHash,
-        role: dto.role as UserRole,
+        rol_id: rol.id,
       },
+      include: {
+        rol: true,
+      }
     });
 
-    if (dto.role === UserRole.EGRESADO) {
-      throw new BadRequestException('Use el endpoint de registro para egresados');
-    }
-
-    if (dto.role === UserRole.EMPRESA) {
-      throw new BadRequestException('Use el endpoint de registro para empresas');
-    }
-
-    return this.generateTokens(user);
+    return this.generateAuthResponse(usuario as any);
   }
 
-  async registerEgresado(dto: RegisterEgresadoDto): Promise<TokenPair> {
-    const existingUser = await this.prisma.user.findUnique({
+  async registerEgresado(dto: RegisterEgresadoDto): Promise<AuthResponse> {
+    const existingUser = await this.prisma.usuario.findUnique({
       where: { email: dto.email },
     });
 
@@ -91,13 +105,17 @@ export class AuthService {
       throw new ConflictException('El email ya está registrado');
     }
 
+    const rol = await this.prisma.rol.findUnique({
+      where: { nombre: 'EGRESADO' },
+    });
+
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    const user = await this.prisma.user.create({
+    const usuario = await this.prisma.usuario.create({
       data: {
         email: dto.email,
         password_hash: passwordHash,
-        role: UserRole.EGRESADO,
+        rol_id: rol!.id,
         egresado: {
           create: {
             nombres: dto.nombres,
@@ -106,15 +124,16 @@ export class AuthService {
         },
       },
       include: {
-        egresado: true,
+        rol: true,
+        egresado: { select: { id: true } },
       },
     });
 
-    return this.generateTokens(user);
+    return this.generateAuthResponse(usuario as any);
   }
 
-  async registerEmpresa(dto: RegisterEmpresaDto): Promise<TokenPair> {
-    const existingUser = await this.prisma.user.findUnique({
+  async registerEmpresa(dto: RegisterEmpresaDto): Promise<AuthResponse> {
+    const existingUser = await this.prisma.usuario.findUnique({
       where: { email: dto.email },
     });
 
@@ -130,13 +149,17 @@ export class AuthService {
       throw new ConflictException('El NIT ya está registrado');
     }
 
+    const rol = await this.prisma.rol.findUnique({
+      where: { nombre: 'EMPRESA' },
+    });
+
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    const user = await this.prisma.user.create({
+    const usuario = await this.prisma.usuario.create({
       data: {
         email: dto.email,
         password_hash: passwordHash,
-        role: UserRole.EMPRESA,
+        rol_id: rol!.id,
         empresa: {
           create: {
             nombre: dto.nombre,
@@ -145,60 +168,83 @@ export class AuthService {
         },
       },
       include: {
-        empresa: true,
+        rol: true,
+        empresa: { select: { id: true } },
       },
     });
 
-    return this.generateTokens(user);
+    return this.generateAuthResponse(usuario as any);
   }
 
   async logout(userId: string): Promise<{ message: string }> {
     return { message: 'Sesión cerrada correctamente' };
   }
 
-  async refreshToken(userId: string): Promise<TokenPair> {
-    const user = await this.prisma.user.findUnique({
+  async refreshToken(userId: string): Promise<AuthResponse> {
+    const usuario = await this.prisma.usuario.findUnique({
       where: { id: userId },
+      include: {
+        rol: true,
+        egresado: { select: { id: true } },
+        empresa: { select: { id: true } },
+      }
     });
 
-    if (!user || !user.is_active) {
+    if (!usuario || !usuario.estado) {
       throw new UnauthorizedException('Usuario inactivo o no encontrado');
     }
 
-    return this.generateTokens(user);
+    return this.generateAuthResponse(usuario as any);
   }
 
-  async validateToken(token: string): Promise<UserWithProfile | null> {
+  async validateToken(token: string): Promise<UsuarioConPerfil | null> {
     try {
       const payload = this.jwtService.verify(token, {
         secret: process.env.JWT_SECRET || 'default-secret-change-in-production',
       });
 
-      const user = await this.prisma.user.findUnique({
+      const usuario = await this.prisma.usuario.findUnique({
         where: { id: payload.sub },
         include: {
+          rol: true,
           egresado: { select: { id: true } },
           empresa: { select: { id: true } },
         },
       });
 
-      return user as UserWithProfile;
+      return usuario as any;
     } catch {
       return null;
     }
   }
 
-  private generateTokens(user: UserWithProfile): TokenPair {
-    const payload = { sub: user.id, email: user.email, role: user.role };
+  private generateAuthResponse(usuario: UsuarioConPerfil): AuthResponse {
+    const profileId = usuario.rol.nombre === 'EGRESADO' ? usuario.egresado?.id : usuario.rol.nombre === 'EMPRESA' ? usuario.empresa?.id : undefined;
+    
+    const payload = { 
+      sub: usuario.id, 
+      email: usuario.email, 
+      role: usuario.rol.nombre,
+      profileId 
+    };
 
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: process.env.JWT_ACCESS_EXPIRES || '15m',
+      expiresIn: (process.env.JWT_ACCESS_EXPIRES as any) || '15m',
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: process.env.JWT_REFRESH_EXPIRES || '7d',
+      expiresIn: (process.env.JWT_REFRESH_EXPIRES as any) || '7d',
     });
 
-    return { accessToken, refreshToken };
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: usuario.id,
+        email: usuario.email,
+        role: usuario.rol.nombre,
+        profileId,
+      },
+    };
   }
 }

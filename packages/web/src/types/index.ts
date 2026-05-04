@@ -69,4 +69,4 @@ export interface Postulacion {
   fechaPostulacion: Date;
 }
 
-export type AppRouter = typeof import("@/server/router").appRouter;
+export type AppRouter = import("../../../server/src/trpc/trpc.router").TAppRouter;

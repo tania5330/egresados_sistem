@@ -2,25 +2,41 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { trpc } from "@/lib/trpc/react";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
-    nombre: "",
     email: "",
     password: "",
     confirmPassword: "",
-    rol: "egresado",
+    nombres: "",
+    apellidos: "",
+  });
+  const [error, setError] = useState("");
+
+  const registerMutation = trpc.auth.registerEgresado.useMutation({
+    onSuccess: () => {
+      router.push("/auth/login");
+    },
+    onError: (err) => {
+      setError(err.message || "Error al registrarse");
+    },
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     if (formData.password !== formData.confirmPassword) {
-      alert("Las contraseñas no coinciden");
+      setError("Las contraseñas no coinciden");
       return;
     }
-    // TODO: Implement registration
-    router.push("/login");
+    registerMutation.mutate({
+      email: formData.email,
+      password: formData.password,
+      nombres: formData.nombres,
+      apellidos: formData.apellidos,
+    });
   };
 
   return (
@@ -32,19 +48,41 @@ export default function RegisterPage() {
             Regístrate en el sistema de egresados
           </p>
         </div>
+
+        {error && (
+          <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="nombre" className="text-sm font-medium">
-              Nombre completo
-            </label>
-            <input
-              id="nombre"
-              type="text"
-              value={formData.nombre}
-              onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              required
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label htmlFor="nombres" className="text-sm font-medium">
+                Nombres
+              </label>
+              <input
+                id="nombres"
+                type="text"
+                value={formData.nombres}
+                onChange={(e) => setFormData({ ...formData, nombres: e.target.value })}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="apellidos" className="text-sm font-medium">
+                Apellidos
+              </label>
+              <input
+                id="apellidos"
+                type="text"
+                value={formData.apellidos}
+                onChange={(e) => setFormData({ ...formData, apellidos: e.target.value })}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                required
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">
@@ -58,20 +96,6 @@ export default function RegisterPage() {
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               required
             />
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="rol" className="text-sm font-medium">
-              Tipo de cuenta
-            </label>
-            <select
-              id="rol"
-              value={formData.rol}
-              onChange={(e) => setFormData({ ...formData, rol: e.target.value })}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="egresado">Egresado</option>
-              <option value="empresa">Empresa</option>
-            </select>
           </div>
           <div className="space-y-2">
             <label htmlFor="password" className="text-sm font-medium">

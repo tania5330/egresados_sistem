@@ -33,12 +33,18 @@ interface MisPostulacionesProps {
   onVerEmpresa?: (id: string) => void;
 }
 
-const estadoConfig: Record<Postulacion["estado"], { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info" }> = {
+const estadoConfig: Record<Postulacion["estado"] | string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info" }> = {
   pendiente: { label: "Pendiente", variant: "warning" },
   revisando: { label: "En revisión", variant: "info" },
   entrevista: { label: "Entrevista", variant: "success" },
   rechazado: { label: "Rechazado", variant: "destructive" },
   aceptado: { label: "Aceptado", variant: "success" },
+  // Mapeo para estados provenientes del backend (Prisma Enum)
+  POSTULADO: { label: "Postulado", variant: "warning" },
+  EN_REVISION: { label: "En revisión", variant: "info" },
+  ENTREVISTA: { label: "Entrevista", variant: "success" },
+  RECHAZADO: { label: "Rechazado", variant: "destructive" },
+  CONTRATADO: { label: "Contratado", variant: "success" },
 };
 
 export function MisPostulaciones({
@@ -81,11 +87,11 @@ export function MisPostulaciones({
               className="w-full md:w-40"
             >
               <option value="all">Todos los estados</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="revisando">En revisión</option>
-              <option value="entrevista">Entrevista</option>
-              <option value="rechazado">Rechazado</option>
-              <option value="aceptado">Aceptado</option>
+              <option value="POSTULADO">Postulado</option>
+              <option value="EN_REVISION">En revisión</option>
+              <option value="ENTREVISTA">Entrevista</option>
+              <option value="RECHAZADO">Rechazado</option>
+              <option value="CONTRATADO">Contratado</option>
             </Select>
           </div>
         </div>
@@ -111,7 +117,7 @@ export function MisPostulaciones({
             </TableHeader>
             <TableBody>
               {filteredData.map((postulacion) => {
-                const config = estadoConfig[postulacion.estado];
+                const config = estadoConfig[postulacion.estado] || { label: postulacion.estado, variant: "outline" };
                 return (
                   <TableRow key={postulacion.id}>
                     <TableCell className="font-medium">

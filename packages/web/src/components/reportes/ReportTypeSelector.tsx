@@ -42,7 +42,7 @@ export function ReportTypeSelector({
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">Seleccionar Tipo de Reporte</h3>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {reportTypes.map((type) => (
+        {reportTypes?.map((type) => (
           <button
             key={type.id}
             onClick={() => onSelect(type.id)}

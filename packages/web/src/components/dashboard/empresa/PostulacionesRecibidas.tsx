@@ -43,17 +43,14 @@ export function PostulacionesRecibidas({
   onContactar,
   onActualizarEstado,
 }: PostulacionesRecibidasProps) {
+  const [filter, setFilter] = useState("todos");
   const [searchTerm, setSearchTerm] = useState("");
-  const [estadoFilter, setEstadoFilter] = useState<string>("all");
-  const [ofertaFilter, setOfertaFilter] = useState<string>("all");
 
   const filteredData = data?.filter((candidato) => {
-    const matchesSearch =
-      candidato.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      candidato.correo.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesEstado = estadoFilter === "all" || candidato.estado === estadoFilter;
-    const matchesOferta = ofertaFilter === "all" || candidato.oferta === ofertaFilter;
-    return matchesSearch && matchesEstado && matchesOferta;
+    const matchesFilter = filter === "todos" || candidato.estado === filter;
+    const matchesSearch = candidato.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         candidato.oferta.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesFilter && matchesSearch;
   });
 
   const uniqueOfertas = [...new Set(data?.map((c) => c.oferta) || [])];
@@ -77,29 +74,18 @@ export function PostulacionesRecibidas({
               />
             </div>
             <Select
-              value={estadoFilter}
-              onChange={(e) => setEstadoFilter(e.target.value)}
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
               className="w-full md:w-40"
             >
-              <option value="all">Todos los estados</option>
+              <option value="todos">Todos los estados</option>
               <option value="nuevo">Nuevo</option>
               <option value="revisando">En revisión</option>
               <option value="entrevista">Entrevista</option>
               <option value="rechazado">Rechazado</option>
               <option value="contratado">Contratado</option>
             </Select>
-            <Select
-              value={ofertaFilter}
-              onChange={(e) => setOfertaFilter(e.target.value)}
-              className="w-full md:w-48"
-            >
-              <option value="all">Todas las ofertas</option>
-              {uniqueOfertas.map((oferta) => (
-                <option key={oferta} value={oferta}>
-                  {oferta}
-                </option>
-              ))}
-            </Select>
+
           </div>
         </div>
       </CardHeader>
@@ -193,7 +179,7 @@ export function PostulacionesRecibidas({
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Users className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-sm text-muted-foreground">
-              {searchTerm || estadoFilter !== "all" || ofertaFilter !== "all"
+              {searchTerm || filter !== "todos"
                 ? "No se encontraron candidatos con esos filtros"
                 : "Aún no has recibido postulaciones"}
             </p>

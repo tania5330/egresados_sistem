@@ -70,6 +70,57 @@ export class CreateOfertaDto {
 
   @IsOptional()
   @IsArray()
-  @IsUUID('4', { each: true })
   habilidades?: { id: string; obligatoria: boolean }[];
+}
+
+export class UpdateOfertaDto extends CreateOfertaDto {}
+
+export class FilterOfertaDto {
+  @IsOptional()
+  @IsString()
+  ciudad?: string;
+
+  @IsOptional()
+  @IsString()
+  pais?: string;
+
+  @IsOptional()
+  @IsEnum(ModalidadOferta)
+  modalidad?: ModalidadOferta;
+
+  @IsOptional()
+  @IsEnum(TipoContrato)
+  tipo_contrato?: TipoContrato;
+
+  @IsOptional()
+  @IsNumber()
+  salario_min?: number;
+
+  @IsOptional()
+  @IsNumber()
+  salario_max?: number;
+
+  @IsOptional()
+  @IsArray()
+  habilidades?: string[];
+
+  @IsOptional()
+  @IsDateString()
+  fecha_cierre_desde?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fecha_cierre_hasta?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  activa?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  page?: number;
+
+  @IsOptional()
+  @IsNumber()
+  limit?: number;
 }

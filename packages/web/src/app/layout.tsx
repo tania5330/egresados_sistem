@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "@/styles/globals.css";
 import { TRPCProvider } from "@/lib/trpc/provider";
+import { Toaster } from "sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,7 +19,10 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={inter.className}>
-        <TRPCProvider>{children}</TRPCProvider>
+        <TRPCProvider>
+          {children}
+          <Toaster richColors closeButton position="top-right" />
+        </TRPCProvider>
       </body>
     </html>
   );

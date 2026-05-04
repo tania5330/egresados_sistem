@@ -27,7 +27,7 @@ export class FilterEgresadoDto {
 
   @IsOptional()
   @IsArray()
-  @IsUUID({ each: true })
+  @IsUUID('4', { each: true })
   habilidad_ids?: string[];
 
   @IsOptional()

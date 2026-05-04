@@ -43,6 +43,7 @@ interface RendimientoOfertasProps {
   isLoading?: boolean;
   onVerDetalles?: (id: string) => void;
   onVerPostulaciones?: (id: string) => void;
+  onCrearOferta?: () => void;
 }
 
 const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444"];
@@ -52,6 +53,7 @@ export function RendimientoOfertas({
   isLoading,
   onVerDetalles,
   onVerPostulaciones,
+  onCrearOferta,
 }: RendimientoOfertasProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortField, setSortField] = useState<"postulaciones" | "vistas" | "tasaConversion">("postulaciones");
@@ -98,22 +100,27 @@ export function RendimientoOfertas({
                 className="pl-9 w-full md:w-64"
               />
             </div>
-            <div className="flex gap-1">
-              <Button
-                variant={viewMode === "table" ? "default" : "outline"}
-                size="icon"
-                onClick={() => setViewMode("table")}
-              >
-                <ArrowUpDown className="h-4 w-4" />
+            {onCrearOferta && (
+              <Button onClick={onCrearOferta} size="sm">
+                Crear Oferta
               </Button>
-              <Button
-                variant={viewMode === "chart" ? "default" : "outline"}
-                size="icon"
-                onClick={() => setViewMode("chart")}
-              >
-                <BarChart3 className="h-4 w-4" />
-              </Button>
-            </div>
+            )}
+          </div>
+          <div className="flex gap-1">
+            <Button
+              variant={viewMode === "table" ? "default" : "outline"}
+              size="icon"
+              onClick={() => setViewMode("table")}
+            >
+              <ArrowUpDown className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "chart" ? "default" : "outline"}
+              size="icon"
+              onClick={() => setViewMode("chart")}
+            >
+              <BarChart3 className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </CardHeader>

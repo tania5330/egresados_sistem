@@ -1,14 +1,19 @@
-import { initTRPC, TRPCError } from '@trpc/server';
+import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { AuthService } from './auth.service';
 import { UserRole } from './dto/auth.dto';
-import { RouterInputs, RouterOutputs } from '../../trpc/trpc.router';
+import { TrpcService } from '../../trpc/trpc.service';
+import { TRPCError } from '@trpc/server';
 
-const t = initTRPC.create();
+@Injectable()
+export class AuthTrpc {
+  constructor(
+    private trpc: TrpcService,
+    private authService: AuthService,
+  ) {}
 
-export const authRouter = (authService: AuthService) =>
-  t.router({
-    login: t.procedure
+  router = this.trpc.router({
+    login: this.trpc.publicProcedure
       .input(
         z.object({
           email: z.string().email('Email inválido'),
@@ -17,7 +22,7 @@ export const authRouter = (authService: AuthService) =>
       )
       .mutation(async ({ input }) => {
         try {
-          return await authService.login(input);
+          return await this.authService.login(input);
         } catch (error: any) {
           throw new TRPCError({
             code: 'UNAUTHORIZED',
@@ -26,7 +31,7 @@ export const authRouter = (authService: AuthService) =>
         }
       }),
 
-    register: t.procedure
+    register: this.trpc.publicProcedure
       .input(
         z.object({
           email: z.string().email('Email inválido'),
@@ -36,7 +41,7 @@ export const authRouter = (authService: AuthService) =>
       )
       .mutation(async ({ input }) => {
         try {
-          return await authService.register(input);
+          return await this.authService.register(input);
         } catch (error: any) {
           throw new TRPCError({
             code: 'CONFLICT',
@@ -45,7 +50,7 @@ export const authRouter = (authService: AuthService) =>
         }
       }),
 
-    registerEgresado: t.procedure
+    registerEgresado: this.trpc.publicProcedure
       .input(
         z.object({
           email: z.string().email('Email inválido'),
@@ -56,7 +61,10 @@ export const authRouter = (authService: AuthService) =>
       )
       .mutation(async ({ input }) => {
         try {
-          return await authService.registerEgresado(input);
+          return await this.authService.registerEgresado({
+            ...input,
+            role: UserRole.EGRESADO,
+          });
         } catch (error: any) {
           throw new TRPCError({
             code: 'CONFLICT',
@@ -65,7 +73,7 @@ export const authRouter = (authService: AuthService) =>
         }
       }),
 
-    registerEmpresa: t.procedure
+    registerEmpresa: this.trpc.publicProcedure
       .input(
         z.object({
           email: z.string().email('Email inválido'),
@@ -76,7 +84,10 @@ export const authRouter = (authService: AuthService) =>
       )
       .mutation(async ({ input }) => {
         try {
-          return await authService.registerEmpresa(input);
+          return await this.authService.registerEmpresa({
+            ...input,
+            role: UserRole.EMPRESA,
+          });
         } catch (error: any) {
           throw new TRPCError({
             code: 'CONFLICT',
@@ -85,31 +96,21 @@ export const authRouter = (authService: AuthService) =>
         }
       }),
 
-    logout: t.procedure
-      .input(z.object({}))
-      .mutation(async ({ ctx }) => {
-        const userId = ctx.user?.id;
-        if (!userId) {
-          throw new TRPCError({
-            code: 'UNAUTHORIZED',
-            message: 'No autenticado',
-          });
-        }
-        return authService.logout(userId);
-      }),
+    logout: this.trpc.protectedProcedure.mutation(async ({ ctx }) => {
+      const userId = ctx.user?.id;
+      if (!userId) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'No autenticado',
+        });
+      }
+      return this.authService.logout(userId);
+    }),
 
-    refreshToken: t.procedure
+    refreshToken: this.trpc.publicProcedure
       .input(z.object({ userId: z.string() }))
       .mutation(async ({ input }) => {
-        try {
-          return await authService.refreshToken(input.userId);
-        } catch (error: any) {
-          throw new TRPCError({
-            code: 'UNAUTHORIZED',
-            message: error.message || 'Token inválido',
-          });
-        }
+        return this.authService.refreshToken(input.userId);
       }),
   });
-
-export type AuthRouter = ReturnType<typeof authRouter>;
+}

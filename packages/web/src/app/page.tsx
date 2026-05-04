@@ -7,5 +7,5 @@ export default function Home() {
     redirect("/dashboard");
   }
 
-  redirect("/login");
+  redirect("/auth/login");
 }
